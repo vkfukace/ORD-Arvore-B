@@ -1,8 +1,20 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
 #define M 5
 #define NULO -1
+#define MAX_DIGITO_CHAVE 3
+
+typedef struct
+{
+    int chaves[M - 1];
+    int filhos[M];
+    int num_chaves;
+} pagina;
+
+// ###################################################################################################################
+// ###################################################################################################################
 
 // Arruma o registro para saída retirando algum possivel lixo
 // Assume que o registro tenha 7 '|'
@@ -355,6 +367,56 @@ int insere(FILE *dados, char *reg, short *espaco, int *offset_reg, short *tam_re
     }
 }
 
+// ###################################################################################################################
+// ###################################################################################################################
+
+// Guarda uma chave de f em chave
+// Requer que MAX_DIGITO_CHAVE seja tamanho necessário para a chave
+void pegachave(FILE *f, int *chave)
+{
+    int i = 0;
+    char chave_str[MAX_DIGITO_CHAVE + 1];
+    char ch = fgetc(f);
+
+    while (ch != EOF && ch != '\n')
+    {
+        chave_str[i] = ch;
+        i++;
+        ch = fgetc(f);
+    }
+    chave_str[i] = '\0';
+    *chave = atoi(chave_str);
+}
+
+// Insere chave na árvore B em btree
+// Se a página em que a chave for inserida já conter M chaves, será necessário divisão e promoção
+//
+// chave_pro e filho_d_pro são variáveis de retorno
+// Se a inserção da chave resultar em divisão e promoção, CHAVE_PRO conterá a chave promovida
+// Quando houver uma CHAVE_PRO, FILHO_D_PRO conterá o ponteiro para o seu filho direito
+//
+// Retorna 1 se houver promoção na árvore
+//         0 se não houver promoção na árvore
+//         -1 se a chave a ser inserida já se encontra na árvore
+int insere(FILE *btree, int rrn_atual, int chave, int filho_d_pro, int chave_pro) // talvez tem q ter raiz nos parametros
+{
+    // https://classroom.google.com/u/1/c/MTQxMzczNDcxNDI4/m/MjEyNDMxODMwMzUw/details       pag 13
+    //
+    //     Variáveis locais importantes da função insere:
+    // – PAG: página que está sendo examinada
+    // – NOVAPAG: nova página que é criada caso ocorra uma divisão
+    // – POS: posição da chave em PAG, se ela estiver lá; caso contrário, a posição em
+    // que deve ser inserida (ou a posição do ponteiro para a próxima página)
+    // – RRN_PRO: recebe o valor do RRN da página promovida para o nível corrente
+    // (via FILHO_D_PRO)
+    // • Se uma divisão ocorre no nível imediatamente inferior, RRN_PRO contém o RRN da
+    // nova página criada durante a divisão. RRN_PRO é o filho direito que deve ser
+    // inserido junto com CHV_PRO em PAG
+
+    // – CHV_PRO: recebe o valor da chave promovida para o nível corrente
+    // (via CHAVE_PRO)
+}
+
 int main(int argc, char **argv)
 {
     if (argc < 2) // Menos argumentos que o necessário
@@ -375,30 +437,28 @@ int main(int argc, char **argv)
             exit(EXIT_FAILURE);
         }
 
-        FILE *chave;
-        chave = fopen(argv[2], "r");
+        FILE *arq_chave;
+        arq_chave = fopen(argv[2], "r");
         FILE *btree;
         btree = fopen("btree.dat", "wb");
 
         printf("Modo de importacao ativado ... nome do arquivo de chaves = %s\n", argv[2]);
 
-        // int topo_led = -1;
-        // char *str;
-        // short int tam;
+        int raiz = -1;
+        int chave;
 
-        // fwrite(&topo_led, sizeof(int), 1, btree);
-        // while (!feof(import))
-        // {
-        //     tam = tamanhoreg(importaux);
-        //     str = malloc(sizeof(char) * tam);
-        //     pegareg(import, str);
-        //     fwrite(&tam, sizeof(short int), 1, btree);
-        //     fwrite(str, sizeof(char), tam, btree);
-        //     free(str);
-        // }
+        fwrite(&raiz, sizeof(int), 1, btree);
+        while (!feof(arq_chave))
+        {
+            pegachave(arq_chave, &chave);
+            printf("%d\n", chave);
+            // fwrite(&tam, sizeof(short int), 1, btree);
+            // fwrite(str, sizeof(char), tam, btree);
+            // free(str);
+        }
 
         fclose(btree);
-        fclose(chave);
+        fclose(arq_chave);
     }
     else if (strcmp(argv[1], "-e") == 0) // Modo de Impressão de Árvore
     {
@@ -413,6 +473,7 @@ int main(int argc, char **argv)
 
         printf("Modo de Impressão da Árvore B ativado\n\n");
 
+        pagina pag;
         char op, operando[150];
 
         // while (!feof(operacoes))
