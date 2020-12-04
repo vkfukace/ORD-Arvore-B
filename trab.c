@@ -2,8 +2,15 @@
 #include <stdlib.h>
 #include <string.h>
 
+// TODO: ler_pagina, escrever_pagina, busca_na_pagina, insere_pagina, divide_pagina
+
+// Ordem da árvore B
 #define M 5
+
 #define NULO -1
+
+// Número máximo de digitos de uma chave.
+// EX: MAX_DIGITO_CHAVE = 3 então valor máximo da chave é 999
 #define MAX_DIGITO_CHAVE 3
 
 typedef struct
@@ -124,24 +131,6 @@ void pega_linha(FILE *f, char *str, int tam)
             str[i] = c;
             c = fgetc(f);
         }
-    }
-}
-
-// Guarda a chave de str em ch
-// Requer que str tenha formato de registro e chave tenha tamanho adequado
-void pega_chave(char *str, char *ch, int tam_ch)
-{
-    int i = 0;
-
-    while (str[i] != '|')
-    {
-        ch[i] = str[i];
-        i++;
-    }
-    while (i < tam_ch)
-    {
-        ch[i] = '\0';
-        i++;
     }
 }
 
@@ -372,7 +361,7 @@ int insere(FILE *dados, char *reg, short *espaco, int *offset_reg, short *tam_re
 
 // Guarda uma chave de f em chave
 // Requer que MAX_DIGITO_CHAVE seja tamanho necessário para a chave
-void pegachave(FILE *f, int *chave)
+void pega_chave(FILE *f, int *chave)
 {
     int i = 0;
     char chave_str[MAX_DIGITO_CHAVE + 1];
@@ -385,8 +374,29 @@ void pegachave(FILE *f, int *chave)
         ch = fgetc(f);
     }
     chave_str[i] = '\0';
-    *chave = atoi(chave_str);
+    if (i > 0)
+        *chave = atoi(chave_str);
 }
+
+// Lê uma página de f em pag
+void ler_pagina(FILE *f, pagina *pag) {}
+
+// Escreve pag em f no rrn dado
+void escrever_pagina(FILE *f, pagina pag, int rrn) {}
+
+// Busca a chave em pag
+// pos é uma variável de retorno que contém a posição da chave na página se for encontrado
+//      se não for encontrado, pos contém a posição do filho que teria chave
+// Retorna 1 se for encontrado
+//         0 se não for encontrado
+int busca_na_pagina(int chave, pagina pag, int pos) {}
+
+// Insere chave e o filho associado à chave em pag
+// Requer que haja espaço em pag para inserir
+void insere_pagina(pagina pag, int chave, int filho) {}
+
+// TODO: descricao
+void divide_pagina(int chv_pro, int rrn_pro, pagina *pag, int *chave_pro, int *filho_d_pro, pagina *novapag) {}
 
 // Insere chave na árvore B em btree
 // Se a página em que a chave for inserida já conter M chaves, será necessário divisão e promoção
@@ -398,10 +408,10 @@ void pegachave(FILE *f, int *chave)
 // Retorna 1 se houver promoção na árvore
 //         0 se não houver promoção na árvore
 //         -1 se a chave a ser inserida já se encontra na árvore
-int insere(FILE *btree, int rrn_atual, int chave, int filho_d_pro, int chave_pro) // talvez tem q ter raiz nos parametros
+int insere_arvoreB(FILE *btree, int rrn_atual, int chave, int filho_d_pro, int chave_pro) // talvez tem q ter raiz nos parametros
 {
     // https://classroom.google.com/u/1/c/MTQxMzczNDcxNDI4/m/MjEyNDMxODMwMzUw/details       pag 13
-    //
+
     //     Variáveis locais importantes da função insere:
     // – PAG: página que está sendo examinada
     // – NOVAPAG: nova página que é criada caso ocorra uma divisão
@@ -409,12 +419,62 @@ int insere(FILE *btree, int rrn_atual, int chave, int filho_d_pro, int chave_pro
     // que deve ser inserida (ou a posição do ponteiro para a próxima página)
     // – RRN_PRO: recebe o valor do RRN da página promovida para o nível corrente
     // (via FILHO_D_PRO)
-    // • Se uma divisão ocorre no nível imediatamente inferior, RRN_PRO contém o RRN da
-    // nova página criada durante a divisão. RRN_PRO é o filho direito que deve ser
-    // inserido junto com CHV_PRO em PAG
-
+    //      • Se uma divisão ocorre no nível imediatamente inferior, RRN_PRO contém o RRN da
+    //      nova página criada durante a divisão. RRN_PRO é o filho direito que deve ser
+    //      inserido junto com CHV_PRO em PAG
     // – CHV_PRO: recebe o valor da chave promovida para o nível corrente
     // (via CHAVE_PRO)
+
+    // TODO: como cria nova pagina aqui???
+
+    pagina pag, novapag;
+    int pos = NULO, resultado, retorno;
+
+    int chv_pro = chave_pro;
+    int rrn_pro = filho_d_pro;
+
+    if (rrn_atual == NULO) // se não está mais em um nó da arvore
+    {
+        chave_pro = chave;
+        filho_d_pro = NULO;
+        // A primeira tentativa de inserção vai ser tratada como uma promoção
+        return 1;
+    }
+    else // se está em um nó da árvore
+    {
+        // TODO: Arrumar ponteiro FILE antes de ler
+        ler_pagina(btree, &pag);
+        resultado = busca_na_pagina(chave, pag, pos); // pos guarda qual filho a chave deveria estar
+    }
+
+    if (resultado == 1) // Se a chave foi encontrada, manda mensagem de erro
+    {
+        printf("Chave %d foi repetida\n", chave);
+        return -1;
+    }
+
+    // Insere recursivamente no filho pos e guarda qual o resultado
+    retorno = insere_arvoreB(btree, pag.filhos[pos], chave, filho_d_pro, chave_pro);
+
+    // Se houver inserção sem promoção ou houver erro não há nada mais a se fazer
+    if (retorno == 0 || retorno == -1)
+        return retorno;
+    else // Se houver promoção
+    {
+        if (pag.num_chaves < M - 1) // Se houver espaço em pag para inserir chave
+        {
+            insere_pag(pag, chv_pro, rrn_pro);
+            escrever_pagina(btree, pag, rrn_atual);
+            return 0;
+        }
+        else // Se não houver espaço
+        {
+            divide_pagina(chv_pro, rrn_pro, &pag, &chave_pro, &filho_d_pro, &novapag);
+            escrever_pagina(btree, pag, rrn_atual);
+            escrever_pagina(btree, novapag, filho_d_pro);
+            return 1;
+        }
+    }
 }
 
 int main(int argc, char **argv)
@@ -444,13 +504,13 @@ int main(int argc, char **argv)
 
         printf("Modo de importacao ativado ... nome do arquivo de chaves = %s\n", argv[2]);
 
-        int raiz = -1;
+        int raiz = NULO;
         int chave;
 
         fwrite(&raiz, sizeof(int), 1, btree);
         while (!feof(arq_chave))
         {
-            pegachave(arq_chave, &chave);
+            pega_chave(arq_chave, &chave);
             printf("%d\n", chave);
             // fwrite(&tam, sizeof(short int), 1, btree);
             // fwrite(str, sizeof(char), tam, btree);
