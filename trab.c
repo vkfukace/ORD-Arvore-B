@@ -336,24 +336,22 @@ void print_pagina(pagina pag, int rrn, int *total_chaves)
     printf("\nRRN: %d\n", rrn);
 
     printf("CHAVES: ");
-    printf("%d ", pag.chaves[i++]);
-    while (i < M - 1 && pag.chaves[i] != NULO)
+    printf("%d ", pag.chaves[i]);
+    for (i = 1; i < pag.num_chaves; i++)
     {
         printf("| %d ", pag.chaves[i]);
-        i++;
     }
     printf("\n");
 
     printf("FILHOS: ");
-    printf("%d ", pag.filhos[j++]);
-    while (j < i + 1)
+    printf("%d ", pag.filhos[i]);
+    for (i = 1; i < pag.num_chaves + 1; i++)
     {
-        printf("| %d ", pag.filhos[j]);
-        j++;
+        printf("| %d ", pag.filhos[i]);
     }
     printf("\n");
 
-    *total_chaves = *total_chaves + i;
+    *total_chaves = *total_chaves + pag.num_chaves;
 }
 
 int main(int argc, char **argv)
