@@ -3,10 +3,6 @@
 #include <string.h>
 #include <math.h>
 
-// TODO: insere_na_arvore
-//       arrumar problema da linha vazia retornar 0 no pega_chave
-//       no divide_pagina o ceil() n funciona com debugger
-
 #define NULO -1
 
 #define FIM_ARQUIVO -1
@@ -15,6 +11,8 @@
 
 #define MAX_DIGITO_CHAVE 3 // Número máximo de digitos de uma chave. \
                            // EX: MAX_DIGITO_CHAVE = 3 então valor máximo da chave é 999
+
+#define TAM_CABECALHO 2 * sizeof(int)
 
 // Defines de retorno na função divide_pagina
 #define ERRO -1
@@ -64,7 +62,7 @@ void esvaziar_pagina(pagina *pag)
 void ler_pagina(FILE *f, pagina *pag, int rrn)
 {
     int i;
-    fseek(f, sizeof(int) + sizeof(pagina) * rrn, SEEK_SET); // vai até o rrn dado
+    fseek(f, TAM_CABECALHO + sizeof(pagina) * rrn, SEEK_SET); // vai até o rrn dado
 
     if (feof(f))
     {
@@ -89,7 +87,7 @@ int escrever_pagina(FILE *f, pagina pag, int rrn)
     long int rrn_retorno;
     if (rrn != FIM_ARQUIVO)
     {
-        fseek(f, sizeof(int) + sizeof(pagina) * rrn, SEEK_SET); // vai até o rrn dado
+        fseek(f, TAM_CABECALHO + sizeof(pagina) * rrn, SEEK_SET); // vai até o rrn dado
         rrn_retorno = rrn;
     }
     else
@@ -238,8 +236,8 @@ void divide_pagina(int chave, int filho, int *chave_pro, pagina *pag, pagina *no
     copia_vetor(filhos_over, meio + 1, M + 1, novapag->filhos, M);
 
     pag->num_chaves = meio;
-    // novapag->num_chaves = (int)(ceil(M_double / 2) - 1);
-    novapag->num_chaves = meio; // debugger n funciona com ceil()
+    novapag->num_chaves = (int)(ceil(M_double / 2) - 1);
+    // novapag->num_chaves = meio; // debugger n funciona com ceil()
 }
 
 // Insere chave na árvore B no arquivo btree
@@ -253,10 +251,8 @@ void divide_pagina(int chave, int filho, int *chave_pro, pagina *pag, pagina *no
 // Retorna ERRO         se houver promoção na árvore
 //         SEM_PROMOCAO se não houver promoção na árvore
 //         PROMOCAO     se a chave a ser inserida já se encontra na árvore
-int insere_na_arvore(FILE *btree, int rrn_atual, int chave, int *raiz, int *filho_d_pro, int *chave_pro)
+int insere_na_arvore(FILE *btree, int rrn_atual, int chave, int *raiz, int *altura, int *filho_d_pro, int *chave_pro)
 {
-    // https://classroom.google.com/u/1/c/MTQxMzczNDcxNDI4/m/MjEyNDMxODMwMzUw/details       pag 13
-
     //     Variáveis locais importantes da função insere:
     // – PAG: página que está sendo examinada
     // – NOVAPAG: nova página que é criada caso ocorra uma divisão
@@ -267,10 +263,7 @@ int insere_na_arvore(FILE *btree, int rrn_atual, int chave, int *raiz, int *filh
     //      • Se uma divisão ocorre no nível imediatamente inferior, RRN_PRO contém o RRN da
     //      nova página criada durante a divisão. RRN_PRO é o filho direito que deve ser
     //      inserido junto com CHV_PRO em PAG
-    // – CHV_PRO: recebe o valor da chave promovida para o nível corrente
-    // (via CHAVE_PRO)
-
-    // TODO: como cria nova pagina aqui???
+    // – CHV_PRO: recebe o valor da chave promovida para o nível corrente(via CHAVE_PRO)
 
     pagina pag, novapag;
     int pos = NULO, resultado, retorno;
@@ -295,7 +288,7 @@ int insere_na_arvore(FILE *btree, int rrn_atual, int chave, int *raiz, int *filh
     }
 
     // Insere recursivamente no filho pos e guarda qual o resultado
-    retorno = insere_na_arvore(btree, pag.filhos[pos], chave, raiz, filho_d_pro, chave_pro);
+    retorno = insere_na_arvore(btree, pag.filhos[pos], chave, raiz, altura, filho_d_pro, chave_pro);
 
     // Se houver inserção sem promoção ou houver erro não há nada mais a se fazer
     if (retorno == SEM_PROMOCAO || retorno == ERRO)
@@ -324,10 +317,39 @@ int insere_na_arvore(FILE *btree, int rrn_atual, int chave, int *raiz, int *filh
                 pagina nova_raiz;
                 cria_nova_raiz(&nova_raiz, *chave_pro, rrn_atual, *filho_d_pro);
                 *raiz = escrever_pagina(btree, nova_raiz, FIM_ARQUIVO);
+                *altura = *altura + 1;
             }
             return PROMOCAO;
         }
     }
+}
+
+// Imprime a página no terminal
+// Adiciona o número de chaves lidas a total_chaves
+void print_pagina(pagina pag, int rrn, int *total_chaves)
+{
+    int i = 0, j = 0;
+    printf("\nRRN: %d\n", rrn);
+
+    printf("CHAVES: ");
+    printf("%d ", pag.chaves[i++]);
+    while (i < M - 1 && pag.chaves[i] != NULO)
+    {
+        printf("| %d ", pag.chaves[i]);
+        i++;
+    }
+    printf("\n");
+
+    printf("FILHOS: ");
+    printf("%d ", pag.filhos[j++]);
+    while (j < i + 1)
+    {
+        printf("| %d ", pag.filhos[j]);
+        j++;
+    }
+    printf("\n");
+
+    *total_chaves = *total_chaves + i;
 }
 
 int main(int argc, char **argv)
@@ -357,167 +379,83 @@ int main(int argc, char **argv)
 
         printf("Modo de importacao ativado ... nome do arquivo de chaves = %s\n", argv[2]);
 
-        int raiz = 0, filho_d_pro, chave_pro;
+        int raiz = 0, altura = 0, retorno, filho_d_pro, chave_pro;
         int chave;
         pagina pag;
 
-        // Escreve a primeira página vazia
+        // Escreve o cabeçalho e a primeira página vazia
         fwrite(&raiz, sizeof(int), 1, btree);
+        fwrite(&altura, sizeof(int), 1, btree);
         esvaziar_pagina(&pag);
         escrever_pagina(btree, pag, 0);
 
-        // =================================================================
-        // testes
-        insere_na_pagina(&pag, 1, 2);
-        insere_na_pagina(&pag, 10, 4);
-        insere_na_pagina(&pag, 5, 3);
-        insere_na_pagina(&pag, 7, 5);
-
-        pagina novapag;
-        int chavepro;
-        divide_pagina(15, 6, &chavepro, &pag, &novapag);
-
-        // // teste=======================================
-        // int i;
-        // for (i = 0; i < M - 1; i++)
-        // {
-        //     printf("%d /", pag.chaves[i]);
-        // }
-        // printf("\n");
-
-        // for (i = 0; i < M; i++)
-        // {
-        //     printf("%d /", pag.filhos[i]);
-        // }
-        // printf("(%d)\n\nasdfasdfaf\n\n", pag.num_chaves);
-
-        // for (i = 0; i < M - 1; i++)
-        // {
-        //     printf("%d /", novapag.chaves[i]);
-        // }
-        // printf("\n");
-
-        // for (i = 0; i < M; i++)
-        // {
-        //     printf("%d /", novapag.filhos[i]);
-        // }
-        // printf("(%d)\n", novapag.num_chaves);
-        // //=============================================
-
-        // busca_na_pagina(6, pag, &chave);
-        // busca_na_pagina(21, pag, &chave);
-        // busca_na_pagina(1, pag, &chave);
-        // busca_na_pagina(0, pag, &chave);
-        // busca_na_pagina(11, pag, &chave);
-
-        // // teste ler_pagina
-        // escrever_pagina(btree, pag, 1); // teste
-        // pag.num_chaves = 45;
-        // ler_pagina(btree, &pag, 0);
-
-        // escrever_pagina(btree, pag, FIM_ARQUIVO);
-
-        // // ===================================================================
-
+        fgetc(arq_chave);
         while (!feof(arq_chave))
         {
+            fseek(arq_chave, -sizeof(char), SEEK_CUR);
             pega_chave(arq_chave, &chave);
-            insere_na_arvore(btree, raiz, chave, &raiz, &filho_d_pro, &chave_pro);
-            fseek(btree, 0, SEEK_SET);
-            fwrite(&raiz, sizeof(int), 1, btree);
+            retorno = insere_na_arvore(btree, raiz, chave, &raiz, &altura, &filho_d_pro, &chave_pro);
+
+            if (retorno == PROMOCAO) // Se houver promoção na raiz
+            {
+                fseek(btree, 0, SEEK_SET);
+                fwrite(&raiz, sizeof(int), 1, btree);
+                fwrite(&altura, sizeof(int), 1, btree);
+            }
+            fgetc(arq_chave);
         }
 
         fclose(btree);
         fclose(arq_chave);
     }
-    else if (strcmp(argv[1], "-e") == 0) // Modo de Impressão de Árvore
+    else if (strcmp(argv[1], "-p") == 0) // Modo de Impressão de Árvore
     {
         FILE *btree;
         btree = fopen("btree.dat", "rb");
 
-        if (btree == NULL)
+        if (btree == NULL) // Se btree.dat não existir
         {
             fprintf(stderr, "Erro: Arquivo \"btree.dat\" nao existe\n");
             exit(EXIT_FAILURE);
         }
 
-        printf("Modo de Impressão da Árvore B ativado\n\n");
+        printf("\nModo de Impressão da Árvore B ativado\n");
 
         pagina pag;
-        char op, operando[150];
+        int raiz, altura, rrn = 0, total_chaves = 0;
+        float taxa_ocupacao;
 
-        // while (!feof(operacoes))
-        // {
-        //     op = fgetc(operacoes);
-        //     fseek(operacoes, 1, SEEK_CUR);
-        //     pega_linha(operacoes, operando, 150);
+        // Ler informações iniciais
+        fseek(btree, 0, SEEK_SET);
+        fread(&raiz, sizeof(int), 1, btree);
+        fread(&altura, sizeof(int), 1, btree);
 
-        //     switch (op)
-        //     {
-        //     case 'b':
-        //         printf("Busca pelo registro de chave \"%s\"\n", operando);
-        //         if (busca(btree, operando)) // Se achou
-        //         {
-        //             fread(&tam_str, sizeof(short), 1, btree);
-        //             str = malloc(sizeof(char) * tam_str);
-        //             pega_linha(btree, str, tam_str);
-        //             //arrumarsaida(str);
-        //             printf("%s (%ld bytes)\n", str, strlen(str));
-        //             free(str);
-        //         }
-        //         else
-        //         {
-        //             printf("Erro: registro nao encontrado!\n");
-        //         }
-        //         break;
+        fgetc(btree);
+        while (!feof(btree))
+        {
+            fseek(btree, -sizeof(char), SEEK_CUR);
+            ler_pagina(btree, &pag, rrn);
+            if (rrn != raiz)
+            {
+                print_pagina(pag, rrn, &total_chaves);
+            }
+            else
+            {
+                printf("\n- - - - Pagina Raiz - - - -");
+                print_pagina(pag, rrn, &total_chaves);
+                printf("- - - - - - - - - - - - - -\n");
+            }
+            rrn++;
+            fgetc(btree);
+        }
+        taxa_ocupacao = 100 * ((float)total_chaves / ((float)rrn * ((float)M - 1)));
+        printf("\n- - - - - - - - - - - - - -\n");
+        printf("Estatisticas da Arvore-B\n");
+        printf("> Altura: %d\n", altura);
+        printf("> Numero de chaves: %d\n", total_chaves);
+        printf("> Numero de paginas: %d\n", rrn);
+        printf("> Taxa de ocupacao: %.2f%%\n", taxa_ocupacao);
 
-        //     case 'r':
-        //         printf("Remocao do registro de chave \"%s\"\n", operando);
-        //         if (remover(btree, operando)) // Se achou
-        //         {
-        //             fread(&tam_str, sizeof(short), 1, btree);
-        //             printf("Registro removido! (%d bytes)\n", tam_str);
-        //             fseek(btree, -(sizeof(short)), SEEK_CUR);
-        //             offset = ftell(btree);
-        //             printf("Posicao: offset = %d bytes (0x%X)\n", offset, offset);
-        //         }
-        //         else
-        //         {
-        //             printf("Erro: registro nao encontrado!\n");
-        //         }
-        //         break;
-
-        //     case 'i':;
-        //         int resultado;
-        //         char chave[4]; // Tinha que ter 1 a mais de tamanho por erros desconhecidos
-        //         pega_chave(operando, chave, 4);
-        //         printf("Insercao do registro de chave \"%s\" (%ld bytes)\n", chave, strlen(operando));
-
-        //         short espaco, tam_sobra, tam_reg;
-        //         int offset_sobra;
-        //         resultado = insere(btree, operando, &espaco, &offset, &tam_reg, &offset_sobra, &tam_sobra);
-
-        //         switch (resultado)
-        //         {
-        //         case -1:
-        //             printf("Local: fim do arquivo\n");
-        //             break;
-        //         case 0:
-        //             printf("Local: offset = %d bytes (0x%X)\n", offset, offset);
-        //             printf("Tamanho do espaco: %d bytes\n", espaco);
-
-        //             break;
-        //         case 1:
-        //             printf("Local: offset = %d bytes (0x%X)\n", offset, offset);
-        //             printf("Tamanho do espaco: %d bytes\n", espaco);
-        //             printf("Tamanho da sobra: %d bytes\n", tam_sobra);
-        //             printf("Offset da sobra: %d bytes (0x%X)\n", offset_sobra, offset_sobra);
-        //             break;
-        //         }
-        //         break;
-        //     }
-        //     printf("\n");
-        // }
         fclose(btree);
     }
     else
