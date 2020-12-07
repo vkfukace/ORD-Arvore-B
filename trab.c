@@ -1,3 +1,7 @@
+// ORD - Trabalho 2
+// Alunos: José Rafael Silva Hermoso    RA:112685
+//         Vinícius Kenzo Fukace        RA:115672
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
