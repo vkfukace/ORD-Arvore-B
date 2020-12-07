@@ -1,363 +1,32 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 
-// TODO: ler_pagina, escrever_pagina, busca_na_pagina, insere_pagina, divide_pagina
-
-// Ordem da árvore B
-#define M 5
+// TODO: insere_na_arvore
+//       arrumar problema da linha vazia retornar 0 no pega_chave
+//       no divide_pagina o ceil() n funciona com debugger
 
 #define NULO -1
 
-// Número máximo de digitos de uma chave.
-// EX: MAX_DIGITO_CHAVE = 3 então valor máximo da chave é 999
-#define MAX_DIGITO_CHAVE 3
+#define FIM_ARQUIVO -1
+
+#define M 5 // Ordem da árvore B - Não pode ser menor que 2
+
+#define MAX_DIGITO_CHAVE 3 // Número máximo de digitos de uma chave. \
+                           // EX: MAX_DIGITO_CHAVE = 3 então valor máximo da chave é 999
+
+// Defines de retorno na função divide_pagina
+#define ERRO -1
+#define SEM_PROMOCAO 0
+#define PROMOCAO 1
 
 typedef struct
 {
+    int num_chaves;
     int chaves[M - 1];
     int filhos[M];
-    int num_chaves;
 } pagina;
-
-// ###################################################################################################################
-// ###################################################################################################################
-
-// Arruma o registro para saída retirando algum possivel lixo
-// Assume que o registro tenha 7 '|'
-void arrumarsaida(char *str)
-{
-    int controle = 0;
-    int tam = strlen(str);
-    int i = 0;
-
-    while (i < tam)
-    {
-        if (str[i] == '|')
-        {
-            controle++;
-        }
-        if (controle == 7)
-        {
-            str[i + 1] = '\0';
-        }
-        i++;
-    }
-}
-
-// Função de teste
-// Printa a LED inteira
-void print_led(FILE *dados)
-{
-    int offset;
-    short tam;
-    fseek(dados, 0, SEEK_SET);
-    fread(&offset, sizeof(int), 1, dados);
-    printf("LED = | ");
-    while (offset != -1)
-    {
-        printf("%d(0x%X)", offset, offset);
-        fseek(dados, offset, SEEK_SET);
-        fread(&tam, sizeof(short), 1, dados);
-        fseek(dados, 1, SEEK_CUR);
-        printf("-%hd> ", tam);
-        fread(&offset, sizeof(int), 1, dados);
-    }
-    printf("-1 |\n");
-}
-
-// Retorna o tamanho do registro
-// Conta até chegar ao fim da linha
-int tamanhoreg(FILE *f)
-{
-    int i = 0;
-    char ch = fgetc(f);
-    while (!feof(f) && ch != '\n')
-    {
-        if (ch != '\r')
-            i++;
-        ch = fgetc(f);
-    }
-    return i;
-}
-
-// Guarda um registo de f em str
-// O registro deve ter numero de campos igual a campo_restante
-// Requer que str já tenha o tamanho necessário para o registro
-void pegareg(FILE *f, char *str)
-{
-    int i = 0;
-    int campo_restante = 7;
-    char ch = fgetc(f);
-
-    while (campo_restante > 0)
-    {
-        if (ch == '|')
-        {
-            campo_restante--;
-        }
-        str[i] = ch;
-        i++;
-        ch = fgetc(f);
-    }
-
-    if (ch == '\r') // causava erros na formatação
-    {
-        ch = fgetc(f);
-    }
-}
-
-// Guarda dados de f em str até a quebra de linha
-// Não inclui '\n', e coloca um '\0' no final
-void pega_linha(FILE *f, char *str, int tam)
-{
-    int i;
-    char c;
-
-    c = fgetc(f);
-    for (i = 0; i < tam; i++)
-    {
-        if (feof(f) || c == '\n')
-        {
-            str[i] = '\0';
-        }
-        else if (c == '\r') // se não tiver isso aqui o strlen sai com 1 a mais
-        {
-            str[i] = '\0';
-            c = fgetc(f);
-        }
-        else
-        {
-            str[i] = c;
-            c = fgetc(f);
-        }
-    }
-}
-
-// Guarda uma chave de f em str
-// Retorna o tamanho de str+1
-// Requer que o ponteiro de arquivo esteja posicionado corretamente
-int pega_chave_arq(FILE *f, char *str)
-{
-    char c;
-    int i = 0;
-
-    c = fgetc(f);
-    while (c != '|' && c != '*')
-    {
-        str[i] = c;
-        i++;
-        c = fgetc(f);
-    }
-    return i + 1;
-}
-
-// Preenche uma string com '\0'
-void limpa_string(char *str, int tam)
-{
-    int i;
-    for (i = 0; i < tam; i++)
-    {
-        str[i] = '\0';
-    }
-}
-
-// Busca o registro com a chave dada no arquivo de dados
-// Se achar retorna 1 e move o ponteiro de dados para o começo do registro
-// Caso contrário, retorna 0
-int busca(FILE *dados, char *chave)
-{
-    short int offset = 0;
-    int tam_chave = strlen(chave);
-    char aux_chave[3]; // malloc e free não estavam funcionando corretamente
-    int tam_aux_chave;
-
-    fseek(dados, sizeof(int), SEEK_SET);
-    char c = fgetc(dados);
-
-    while (c != EOF) // enquanto estiver no arquivo
-    {
-        fseek(dados, -sizeof(char), SEEK_CUR);
-        fread(&offset, sizeof(short int), 1, dados);
-        tam_aux_chave = pega_chave_arq(dados, aux_chave);
-        if (strcmp(chave, aux_chave) == 0)
-        {
-            // retorna para o começo do registro
-            fseek(dados, -(tam_chave + sizeof(char) + sizeof(short)), SEEK_CUR);
-            return 1;
-        }
-        fseek(dados, offset - tam_aux_chave, SEEK_CUR);
-        limpa_string(aux_chave, 3);
-        c = fgetc(dados);
-    }
-    return 0;
-}
-
-// Insere offset no topo da LED, movendo o antigo topo para a segunda posição
-// Volta o ponteiro de arquivo para o começo do registro após a operação
-int insere_topo_led(FILE *dados, int offset)
-{
-    int topo_antigo;
-    char ast = '*';
-    char pipe = '|';
-
-    // Insere a posição do elemento a ser removido no cabeçalho
-    fseek(dados, 0, SEEK_SET);
-    fread(&topo_antigo, sizeof(int), 1, dados);
-    fseek(dados, 0, SEEK_SET);
-    fwrite(&offset, sizeof(int), 1, dados);
-
-    // Remove logicamente o registro colocando o antigo cabeçalho no lugar
-    fseek(dados, offset + sizeof(short), SEEK_SET);
-    fwrite(&ast, sizeof(char), 1, dados);
-    fwrite(&topo_antigo, sizeof(int), 1, dados);
-    fwrite(&pipe, sizeof(char), 1, dados);
-    fseek(dados, offset, SEEK_SET);
-}
-
-// Remove o registro com a chave dada
-// Se o registro não for encontrado retorna 0,
-// Se for encontrado, remove o registro logicamente,
-// insere o registro no topo da LED e retorna 1.
-int remover(FILE *dados, char *chave)
-{
-    int offset;
-
-    fseek(dados, 0, SEEK_SET);
-
-    if (busca(dados, chave))
-    {
-        offset = ftell(dados);
-        insere_topo_led(dados, offset);
-        fseek(dados, offset, SEEK_SET);
-        return 1;
-    }
-    else
-        return 0;
-}
-
-// Busca linearmente na LED por um espaço maior ou igual a tam
-// Retorna o offset do primeiro espaço compatível
-// Se não houver espaço compatível, retorna -1
-int busca_led(FILE *dados, short tam)
-{
-    int offset;
-    short tam_busca;
-    int achou = 0;
-    fseek(dados, 0, SEEK_SET);
-    fread(&offset, sizeof(int), 1, dados);
-
-    while (!achou && offset != -1)
-    {
-        fseek(dados, offset, SEEK_SET);
-        fread(&tam_busca, sizeof(short), 1, dados);
-        if (tam_busca >= tam)
-        {
-            achou = 1;
-        }
-        else
-        {
-            fseek(dados, sizeof(char), SEEK_CUR);
-            fread(&offset, sizeof(int), 1, dados);
-        }
-    }
-    return offset;
-}
-
-// Remove chave da LED, ligando o item anterior ao posterior da lista
-// Chave deve existir na lista
-void remove_led(FILE *dados, int chave)
-{
-    int offset_antes = 0, prox;
-    fseek(dados, 0, SEEK_SET);
-    fread(&prox, sizeof(int), 1, dados);
-
-    while (prox != chave) // Vai até o anterior
-    {
-        prox += sizeof(short) + sizeof(char);
-        fseek(dados, prox, SEEK_SET);
-        fread(&prox, sizeof(int), 1, dados);
-    }
-    fseek(dados, -sizeof(int), SEEK_CUR);
-    offset_antes = ftell(dados); // Grava o offset do anterior
-
-    //printf("*** ant:%d ", offset_antes);
-
-    // Avança até o posterior
-    prox += sizeof(short) + sizeof(char);
-    fseek(dados, prox, SEEK_SET);
-    //printf("agr:%d ", prox);
-    fread(&prox, sizeof(int), 1, dados);
-    fseek(dados, prox, SEEK_SET);
-    //printf("dps:%d ***\n", prox);
-
-    fseek(dados, offset_antes, SEEK_SET);
-    fwrite(&prox, sizeof(int), 1, dados);
-}
-
-// Insere reg na primeira posição compatível na LED
-// Se não hover espaço, insere no final do arquivo
-// Se houver, insere, atualiza a LED, e se a sobra de espaço for maior que 50,
-// reinsere a sobra na led.
-//
-// espaco recebe o tamanho do espaço antes da operação de inserção.
-// offset_reg recebe o offset do local de inserção de reg.
-// tam_reg recebe o tamanho do registro inserido.
-// offset_sobra recebe o offset da sobra que foi reinserida.
-// tam_sobra recebe o tamanho da sobra que foi reinserida.
-//
-// Retorna -1 se a inserção for no final do arquivo,
-//          0 se não houver reinserção na LED,
-//          1 se houver reinserção na LED.
-int insere(FILE *dados, char *reg, short *espaco, int *offset_reg, short *tam_reg, int *offset_sobra, short *tam_sobra)
-{
-    *tam_reg = strlen(reg);
-    int prim_espaco_disp = busca_led(dados, *tam_reg);
-
-    if (prim_espaco_disp == -1)
-    {
-        // Escreve no final do arquivo
-        fseek(dados, 0, SEEK_END);
-        *offset_reg = ftell(dados);
-        fwrite(tam_reg, sizeof(short int), 1, dados);
-        fwrite(reg, sizeof(char), *tam_reg, dados);
-        return -1;
-    }
-    else
-    {
-        remove_led(dados, prim_espaco_disp);
-        fseek(dados, prim_espaco_disp, SEEK_SET);
-        *offset_reg = prim_espaco_disp;
-        fread(espaco, sizeof(short), 1, dados);
-        *tam_sobra = *espaco - *tam_reg;
-        if (*tam_sobra < 50) // Se não houver reinserção na LED
-        {
-            // Escreve reg e escreve um vetor vazio do tamanho da sobra
-            char preenche[*tam_sobra];
-            limpa_string(preenche, *tam_sobra);
-            fwrite(reg, sizeof(char), *tam_reg, dados);
-            fwrite(preenche, sizeof(char), *tam_sobra, dados);
-            return 0;
-        }
-        else // Se houver reinserção na LED
-        {
-            // Insere reg
-            fseek(dados, -sizeof(short), SEEK_CUR);
-            fwrite(tam_reg, sizeof(short), 1, dados);
-            fwrite(reg, sizeof(char), *tam_reg, dados);
-
-            // Cria uma nova partição e insere na LED
-            *tam_sobra -= sizeof(short);
-            *offset_sobra = ftell(dados);
-            fwrite(tam_sobra, sizeof(short), 1, dados);
-            insere_topo_led(dados, *offset_sobra);
-            return 1;
-        }
-    }
-}
-
-// ###################################################################################################################
-// ###################################################################################################################
 
 // Guarda uma chave de f em chave
 // Requer que MAX_DIGITO_CHAVE seja tamanho necessário para a chave
@@ -374,41 +43,217 @@ void pega_chave(FILE *f, int *chave)
         ch = fgetc(f);
     }
     chave_str[i] = '\0';
-    if (i > 0)
-        *chave = atoi(chave_str);
+    *chave = atoi(chave_str);
 }
 
-// Lê uma página de f em pag
-void ler_pagina(FILE *f, pagina *pag) {}
+// Preenche pag com NULO e define o numero de chaves em 0
+void esvaziar_pagina(pagina *pag)
+{
+    int i;
+
+    pag->num_chaves = 0;
+
+    for (i = 0; i < M - 1; i++)
+        pag->chaves[i] = NULO;
+
+    for (i = 0; i < M; i++)
+        pag->filhos[i] = NULO;
+}
+
+// Lê uma página encontrada em f no rrn dado e salva em pag
+void ler_pagina(FILE *f, pagina *pag, int rrn)
+{
+    int i;
+    fseek(f, sizeof(int) + sizeof(pagina) * rrn, SEEK_SET); // vai até o rrn dado
+
+    if (feof(f))
+    {
+        printf("Erro: Fim do arquivo");
+        return;
+    }
+
+    fread(&pag->num_chaves, sizeof(int), 1, f);
+
+    for (i = 0; i < M - 1; i++)
+        fread(&pag->chaves[i], sizeof(int), 1, f);
+
+    for (i = 0; i < M; i++)
+        fread(&pag->filhos[i], sizeof(int), 1, f);
+}
 
 // Escreve pag em f no rrn dado
-void escrever_pagina(FILE *f, pagina pag, int rrn) {}
+// rrn pode ser o rrn da pagina ou FIM_ARQUIVO
+// Retorna o rrn em que pag foi inserido
+int escrever_pagina(FILE *f, pagina pag, int rrn)
+{
+    long int rrn_retorno;
+    if (rrn != FIM_ARQUIVO)
+    {
+        fseek(f, sizeof(int) + sizeof(pagina) * rrn, SEEK_SET); // vai até o rrn dado
+        rrn_retorno = rrn;
+    }
+    else
+    {
+        fseek(f, 0, SEEK_END);
+        rrn_retorno = ftell(f);
+        rrn_retorno = (rrn_retorno - sizeof(int)) / sizeof(pagina);
+    }
+
+    fwrite(&pag, sizeof(pagina), 1, f);
+
+    return rrn_retorno;
+}
 
 // Busca a chave em pag
 // pos é uma variável de retorno que contém a posição da chave na página se for encontrado
-//      se não for encontrado, pos contém a posição do filho que teria chave
+//      se não for encontrado, pos contém a posição em que chave estaria
 // Retorna 1 se for encontrado
 //         0 se não for encontrado
-int busca_na_pagina(int chave, pagina pag, int pos) {}
+int busca_na_pagina(int chave, pagina pag, int *pos)
+{
+    // enquanto a chave vista estiver na página e não for nula
+    for (*pos = 0; *pos < M - 1 && pag.chaves[*pos] != NULO; *pos = *pos + 1)
+    {
+        if (pag.chaves[*pos] == chave)
+            return 1;
+        if (pag.chaves[*pos] > chave)
+            return 0;
+    }
+    return 0;
+}
 
-// Insere chave e o filho associado à chave em pag
+// Insere chave e o filho direito associado à chave em pag
 // Requer que haja espaço em pag para inserir
-void insere_pagina(pagina pag, int chave, int filho) {}
+void insere_na_pagina(pagina *pag, int chave, int filho)
+{
+    int i, j;
+    for (i = M - 2; i > 0; i--)
+    {
+        if (pag->chaves[i - 1] != NULO && chave > pag->chaves[i - 1])
+            break;
+        else
+            pag->chaves[i] = pag->chaves[i - 1];
+    }
+    pag->chaves[i] = chave;
 
-// TODO: descricao
-void divide_pagina(int chv_pro, int rrn_pro, pagina *pag, int *chave_pro, int *filho_d_pro, pagina *novapag) {}
+    for (j = M - 1; j > i + 1; j--)
+    {
+        pag->filhos[j] = pag->filhos[j - 1];
+    }
+    pag->filhos[j] = filho;
 
-// Insere chave na árvore B em btree
+    pag->num_chaves = pag->num_chaves + 1;
+}
+
+// Cria a pagina em overflow
+// Requer que pag.chaves esteja cheia
+// Assume que chaves_over tem tamanho M
+//            filhos_over tem tamanho M+1
+void cria_overflow(pagina pag, int chave, int filho, int chaves_over[], int filhos_over[])
+{
+    int i = 0, j = 0, aux, flag = 0;
+
+    // Cria o chaves_over
+    while (i < M)
+    {
+        // Se tem elementos em pag.chaves e
+        // ou a chave atual é menor ou a chave que causa overflow já foi inserida
+        if (j < M - 1 && (chave > pag.chaves[j] || flag))
+        {
+            chaves_over[i] = pag.chaves[j];
+            i++;
+            j++;
+        }
+        else
+        {
+            chaves_over[i] = chave;
+            i++;
+            aux = i; // aux recebe a posição do filho
+            flag = 1;
+        }
+    }
+
+    i = 0;
+    j = 0;
+    // Cria o filhos_over
+    while (i < M + 1)
+    {
+        if (i != aux)
+        {
+            filhos_over[i] = pag.filhos[j];
+            i++;
+            j++;
+        }
+        else
+        {
+            filhos_over[i] = filho;
+            i++;
+        }
+    }
+}
+
+// Cria uma nova raiz com as informações dadas
+void cria_nova_raiz(pagina *nova_raiz, int chave, int filho_e, int filho_d)
+{
+    esvaziar_pagina(nova_raiz);
+    nova_raiz->chaves[0] = chave;
+    nova_raiz->filhos[0] = filho_e;
+    nova_raiz->filhos[1] = filho_d;
+    nova_raiz->num_chaves = 1;
+}
+
+// Copia o subvetor v1[inicio ... fim] em v2 e preenche o restante com NULO
+void copia_vetor(int v1[], int inicio, int fim, int v2[], int tam_v2)
+{
+    int i, j = 0;
+    for (i = inicio; i < fim; i++)
+    {
+        v2[j] = v1[i];
+        j++;
+    }
+
+    while (j < tam_v2)
+    {
+        v2[j] = NULO;
+        j++;
+    }
+}
+
+// Divide a pagina em overflow em 2
+// A metade esquerda fica em pag, e a direita em novapag
+// chave_pro retorna a chave que vai ser promovida
+void divide_pagina(int chave, int filho, int *chave_pro, pagina *pag, pagina *novapag)
+{
+    int meio = M / 2;
+    double M_double = M; // Necessário para ceil()
+
+    int chaves_over[M], filhos_over[M + 1];
+    cria_overflow(*pag, chave, filho, chaves_over, filhos_over);
+
+    *chave_pro = chaves_over[meio];
+
+    copia_vetor(chaves_over, 0, meio, pag->chaves, M - 1);
+    copia_vetor(chaves_over, meio + 1, M, novapag->chaves, M - 1);
+    copia_vetor(filhos_over, 0, meio + 1, pag->filhos, M);
+    copia_vetor(filhos_over, meio + 1, M + 1, novapag->filhos, M);
+
+    pag->num_chaves = meio;
+    // novapag->num_chaves = (int)(ceil(M_double / 2) - 1);
+    novapag->num_chaves = meio; // debugger n funciona com ceil()
+}
+
+// Insere chave na árvore B no arquivo btree
 // Se a página em que a chave for inserida já conter M chaves, será necessário divisão e promoção
 //
-// chave_pro e filho_d_pro são variáveis de retorno
+// raiz, chave_pro e filho_d_pro são variáveis de retorno
+// raiz contém a raiz da árvore
 // Se a inserção da chave resultar em divisão e promoção, CHAVE_PRO conterá a chave promovida
 // Quando houver uma CHAVE_PRO, FILHO_D_PRO conterá o ponteiro para o seu filho direito
 //
-// Retorna 1 se houver promoção na árvore
-//         0 se não houver promoção na árvore
-//         -1 se a chave a ser inserida já se encontra na árvore
-int insere_arvoreB(FILE *btree, int rrn_atual, int chave, int filho_d_pro, int chave_pro) // talvez tem q ter raiz nos parametros
+// Retorna ERRO         se houver promoção na árvore
+//         SEM_PROMOCAO se não houver promoção na árvore
+//         PROMOCAO     se a chave a ser inserida já se encontra na árvore
+int insere_na_arvore(FILE *btree, int rrn_atual, int chave, int *raiz, int *filho_d_pro, int *chave_pro)
 {
     // https://classroom.google.com/u/1/c/MTQxMzczNDcxNDI4/m/MjEyNDMxODMwMzUw/details       pag 13
 
@@ -430,49 +275,57 @@ int insere_arvoreB(FILE *btree, int rrn_atual, int chave, int filho_d_pro, int c
     pagina pag, novapag;
     int pos = NULO, resultado, retorno;
 
-    int chv_pro = chave_pro;
-    int rrn_pro = filho_d_pro;
-
     if (rrn_atual == NULO) // se não está mais em um nó da arvore
     {
-        chave_pro = chave;
-        filho_d_pro = NULO;
+        *chave_pro = chave;
+        *filho_d_pro = NULO;
         // A primeira tentativa de inserção vai ser tratada como uma promoção
-        return 1;
+        return PROMOCAO;
     }
     else // se está em um nó da árvore
     {
-        // TODO: Arrumar ponteiro FILE antes de ler
-        ler_pagina(btree, &pag);
-        resultado = busca_na_pagina(chave, pag, pos); // pos guarda qual filho a chave deveria estar
+        ler_pagina(btree, &pag, rrn_atual);
+        resultado = busca_na_pagina(chave, pag, &pos); // pos guarda qual filho a chave deveria estar
     }
 
     if (resultado == 1) // Se a chave foi encontrada, manda mensagem de erro
     {
         printf("Chave %d foi repetida\n", chave);
-        return -1;
+        return ERRO;
     }
 
     // Insere recursivamente no filho pos e guarda qual o resultado
-    retorno = insere_arvoreB(btree, pag.filhos[pos], chave, filho_d_pro, chave_pro);
+    retorno = insere_na_arvore(btree, pag.filhos[pos], chave, raiz, filho_d_pro, chave_pro);
 
     // Se houver inserção sem promoção ou houver erro não há nada mais a se fazer
-    if (retorno == 0 || retorno == -1)
+    if (retorno == SEM_PROMOCAO || retorno == ERRO)
         return retorno;
     else // Se houver promoção
     {
+        int chv_pro = *chave_pro;
+        int rrn_pro = *filho_d_pro;
+
         if (pag.num_chaves < M - 1) // Se houver espaço em pag para inserir chave
         {
-            insere_pag(pag, chv_pro, rrn_pro);
+            insere_na_pagina(&pag, chv_pro, rrn_pro);
             escrever_pagina(btree, pag, rrn_atual);
-            return 0;
+            return SEM_PROMOCAO;
         }
         else // Se não houver espaço
         {
-            divide_pagina(chv_pro, rrn_pro, &pag, &chave_pro, &filho_d_pro, &novapag);
+            divide_pagina(chv_pro, rrn_pro, chave_pro, &pag, &novapag);
             escrever_pagina(btree, pag, rrn_atual);
-            escrever_pagina(btree, novapag, filho_d_pro);
-            return 1;
+            // filho_d_pro recebe o rrn da pagina escrita no final do arquivo
+            *filho_d_pro = escrever_pagina(btree, novapag, FIM_ARQUIVO);
+
+            if (rrn_atual == *raiz)
+            {
+                // tratamento especial para raiz
+                pagina nova_raiz;
+                cria_nova_raiz(&nova_raiz, *chave_pro, rrn_atual, *filho_d_pro);
+                *raiz = escrever_pagina(btree, nova_raiz, FIM_ARQUIVO);
+            }
+            return PROMOCAO;
         }
     }
 }
@@ -500,21 +353,78 @@ int main(int argc, char **argv)
         FILE *arq_chave;
         arq_chave = fopen(argv[2], "r");
         FILE *btree;
-        btree = fopen("btree.dat", "wb");
+        btree = fopen("btree.dat", "w+b");
 
         printf("Modo de importacao ativado ... nome do arquivo de chaves = %s\n", argv[2]);
 
-        int raiz = NULO;
+        int raiz = 0, filho_d_pro, chave_pro;
         int chave;
+        pagina pag;
 
+        // Escreve a primeira página vazia
         fwrite(&raiz, sizeof(int), 1, btree);
+        esvaziar_pagina(&pag);
+        escrever_pagina(btree, pag, 0);
+
+        // =================================================================
+        // testes
+        insere_na_pagina(&pag, 1, 2);
+        insere_na_pagina(&pag, 10, 4);
+        insere_na_pagina(&pag, 5, 3);
+        insere_na_pagina(&pag, 7, 5);
+
+        pagina novapag;
+        int chavepro;
+        divide_pagina(15, 6, &chavepro, &pag, &novapag);
+
+        // // teste=======================================
+        // int i;
+        // for (i = 0; i < M - 1; i++)
+        // {
+        //     printf("%d /", pag.chaves[i]);
+        // }
+        // printf("\n");
+
+        // for (i = 0; i < M; i++)
+        // {
+        //     printf("%d /", pag.filhos[i]);
+        // }
+        // printf("(%d)\n\nasdfasdfaf\n\n", pag.num_chaves);
+
+        // for (i = 0; i < M - 1; i++)
+        // {
+        //     printf("%d /", novapag.chaves[i]);
+        // }
+        // printf("\n");
+
+        // for (i = 0; i < M; i++)
+        // {
+        //     printf("%d /", novapag.filhos[i]);
+        // }
+        // printf("(%d)\n", novapag.num_chaves);
+        // //=============================================
+
+        // busca_na_pagina(6, pag, &chave);
+        // busca_na_pagina(21, pag, &chave);
+        // busca_na_pagina(1, pag, &chave);
+        // busca_na_pagina(0, pag, &chave);
+        // busca_na_pagina(11, pag, &chave);
+
+        // // teste ler_pagina
+        // escrever_pagina(btree, pag, 1); // teste
+        // pag.num_chaves = 45;
+        // ler_pagina(btree, &pag, 0);
+
+        // escrever_pagina(btree, pag, FIM_ARQUIVO);
+
+        // // ===================================================================
+
         while (!feof(arq_chave))
         {
             pega_chave(arq_chave, &chave);
-            printf("%d\n", chave);
-            // fwrite(&tam, sizeof(short int), 1, btree);
-            // fwrite(str, sizeof(char), tam, btree);
-            // free(str);
+            insere_na_arvore(btree, raiz, chave, &raiz, &filho_d_pro, &chave_pro);
+            fseek(btree, 0, SEEK_SET);
+            fwrite(&raiz, sizeof(int), 1, btree);
         }
 
         fclose(btree);
